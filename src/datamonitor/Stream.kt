@@ -1,48 +1,53 @@
 package datamonitor
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import io.nats.streaming.StreamingConnectionFactory
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.BroadcastChannel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.broadcast
-import kotlinx.coroutines.launch
 import mu.KotlinLogging
+import java.util.concurrent.TimeoutException
 
 
-data class Topic(val name: String, val fields: Map<String, String>)
-
-
-interface Stream {
-    val name: String
-    val availableTopics: List<String>
-    fun createChannelFor(topicName: String): BroadcastChannel<Topic>?
+interface CancellationToken {
+    fun unsubscribe()
 }
 
+interface Stream {
+
+    class ConnectionFailed : Exception()
+    class SubjectNotFound(msg: String) : Exception(msg)
+
+    val name: String
+
+    @Throws(ConnectionFailed::class, SubjectNotFound::class)
+    fun <T> subscribeToSubject(subject: String, type: Class<T>, handler: (T) -> Unit): CancellationToken
+}
 
 class NatsStream : Stream {
 
     private val connection by lazy { StreamingConnectionFactory("test-cluster", "bar").createConnection() }
-    private val json = jacksonObjectMapper()
+    private val JSON = jacksonObjectMapper()
     private val logger = KotlinLogging.logger { }
+    private val subjects = listOf("topic-foo", "topic-bar", "topic-baz")
     override val name = "NATS"
-    override val availableTopics: List<String>
-        get() = listOf("topic-foo", "topic-bar", "topic-baz")
 
-    override fun createChannelFor(topicName: String): BroadcastChannel<Topic>? {
-        if (!availableTopics.contains(topicName))
-            return null
-        val channel = Channel<Topic>().broadcast()
-        connection.subscribe(topicName) {
-            CoroutineScope(Dispatchers.IO).launch {
-                val topic: Topic = json.readValue(it.data)
-                println("RECEIVED")
-                logger.debug { "$name Received $topic " }
-                channel.send(topic)
+    override fun <T> subscribeToSubject(subject: String, type: Class<T>, handler: (T) -> Unit): CancellationToken {
+        logger.info { "Subscribing to $subject" }
+
+        if (!subjects.contains(subject)) throw Stream.SubjectNotFound("$subject Not Found")
+
+        try {
+            val sub = connection.subscribe(subject) {
+                val msg = JSON.readValue(it.data, type)
+                handler(msg)
             }
+            return object : CancellationToken {
+                override fun unsubscribe() {
+                    sub.unsubscribe()
+                }
+            }
+        } catch (e: TimeoutException) {
+            throw Stream.ConnectionFailed()
+        } catch (e: Exception) {
+            throw e
         }
-        return channel
     }
 }
