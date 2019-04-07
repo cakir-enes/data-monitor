@@ -1,9 +1,14 @@
-import datamonitor.NatsStream
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.features.websocket.WebSockets
+import io.ktor.client.features.websocket.ws
+import io.ktor.client.request.post
+import io.ktor.http.cio.websocket.Frame
+import io.ktor.http.cio.websocket.readText
 import io.nats.streaming.StreamingConnectionFactory
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.channels.filterNotNull
+import kotlinx.coroutines.channels.map
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
@@ -22,7 +27,7 @@ fun main() {
     var x1 = 0
     var x2 = 0
     var x3 = 0
-//    GlobalScope.launch { client.post(host = "localhost", port = 8080, path = "/api/create/user/user1") }
+    GlobalScope.launch { client.post(host = "localhost", port = 8080, path = "/api/create/user/user1") }
     Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate({
 
         connection.publish(
@@ -44,20 +49,20 @@ fun main() {
     }, 0, 1000 / 1, TimeUnit.MILLISECONDS)
 
     GlobalScope.launch {
-        //        client.ws(host = "127.0.0.1", port = 8080, path = "/api/subscription") {
-//            send(Frame.Text("user1/subscribe/topic-foo"))
+        client.ws(host = "127.0.0.1", port = 8080, path = "/api/subscription") {
+            send(Frame.Text("user1/subscribe/topic-foo"))
 //            send(Frame.Text("user1/subscribe/topic-bar"))
 //            send(Frame.Text("user1/subscribe/topic-baz"))
-//
-//            for (msg in incoming.map { it as? Frame.Text }.filterNotNull()) {
-//                println("MESSAGE ${msg.readText()}")
-//            }
-//        }
-        val nc = NatsStream()
-        nc.subscribeToSubject("topic-foo", Topic::class.java) { println("Hooppa $it") }
-            .also { delay(2000); it.unsubscribe() }
-        nc.subscribeToSubject("topic-bar", Topic::class.java) { println("Hooppa $it") }
-        nc.subscribeToSubject("topic-baz", Topic::class.java) { println("Hooppa $it") }
-        println("SDF")
+            launch { delay(2000); send(Frame.Text("user1/unsubscribe/topic-foo")) }
+            for (msg in incoming.map { it as? Frame.Text }.filterNotNull()) {
+                println("MESSAGE ${msg.readText()}")
+            }
+        }
+//        val nc = NatsStream()
+//        nc.subscribe("topic-foo", Topic::class.java) { println("Hooppa $it") }
+//            .also { delay(2000); it.unsubscribe() }
+//        nc.subscribe("topic-bar", Topic::class.java) { println("Hooppa $it") }
+//        nc.subscribe("topic-baz", Topic::class.java) { println("Hooppa $it") }
+//        println("SDF")
     }
 }

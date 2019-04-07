@@ -6,7 +6,8 @@ import mu.KotlinLogging
 import java.util.concurrent.TimeoutException
 
 
-interface CancellationToken {
+interface Subscription {
+    val subject: String
     fun unsubscribe()
 }
 
@@ -18,7 +19,7 @@ interface Stream {
     val name: String
 
     @Throws(ConnectionFailed::class, SubjectNotFound::class)
-    fun <T> subscribeToSubject(subject: String, type: Class<T>, handler: (T) -> Unit): CancellationToken
+    fun <T> subscribe(subject: String, type: Class<T>, handler: (T) -> Unit): Subscription
 }
 
 class NatsStream : Stream {
@@ -29,7 +30,7 @@ class NatsStream : Stream {
     private val subjects = listOf("topic-foo", "topic-bar", "topic-baz")
     override val name = "NATS"
 
-    override fun <T> subscribeToSubject(subject: String, type: Class<T>, handler: (T) -> Unit): CancellationToken {
+    override fun <T> subscribe(subject: String, type: Class<T>, handler: (T) -> Unit): Subscription {
         logger.info { "Subscribing to $subject" }
 
         if (!subjects.contains(subject)) throw Stream.SubjectNotFound("$subject Not Found")
@@ -39,7 +40,8 @@ class NatsStream : Stream {
                 val msg = JSON.readValue(it.data, type)
                 handler(msg)
             }
-            return object : CancellationToken {
+            return object : Subscription {
+                override val subject = subject
                 override fun unsubscribe() {
                     sub.unsubscribe()
                 }

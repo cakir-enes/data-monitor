@@ -79,11 +79,20 @@ fun Application.module(testing: Boolean = false): Unit {
                     .consumeEach { frame ->
                         val (user, op, topic) = frame.readText().split("/")
                         log.debug("WS RECIEVED ${frame.readText()}")
-                        when (op) {
+                        val status = when (op) {
                             "subscribe" -> Server.subscribeUser(user, topic) { topic ->
                                 launch { outgoing.send(Frame.Text(topic.toString())) }
                             }
+                            "unsubscribe" -> Server.unsubscribeUser(user, topic)
+                            else -> null
                         }
+                        val response = when (status) {
+                            is ServerStatus.Success -> "OK"
+                            is ServerStatus.UserNotFound -> "USER_NOT_FOUND"
+                            is ServerStatus.TopicNotFound -> "TOPIC_NOT_FOUND"
+                            else -> "UNKNOWN_OPERATION"
+                        }
+                        outgoing.send(Frame.Text(response))
                     }
             }
         }
