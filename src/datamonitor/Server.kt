@@ -1,5 +1,6 @@
 package datamonitor
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import mu.KotlinLogging
 
 data class User(val name: String, val subscriptions: MutableList<Subscription> = mutableListOf())
@@ -17,6 +18,7 @@ object Server {
     private val streams: List<Stream> = listOf(NatsStream())
     private val users = mutableListOf<User>()
     private val logger = KotlinLogging.logger { }
+    private val JSON = jacksonObjectMapper()
 
     fun addUser(name: String): ServerStatus {
         logger.info { "ADDING USER $name" }
@@ -43,5 +45,10 @@ object Server {
         val subscription = user?.subscriptions?.find { it.subject == topicName } ?: return ServerStatus.TopicNotFound
         subscription?.unsubscribe()
         return ServerStatus.Success
+    }
+
+    fun publish(userName: String, topic: Topic) {
+//        val topic = JSON.readValue<Topic>(topicJSON)
+        streams.forEach { it.publish(topic.name, topic, Topic::class.java) }
     }
 }

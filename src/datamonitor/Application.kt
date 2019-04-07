@@ -7,11 +7,11 @@ import io.ktor.application.install
 import io.ktor.application.log
 import io.ktor.features.ContentNegotiation
 import io.ktor.features.StatusPages
-import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.cio.websocket.Frame
 import io.ktor.http.cio.websocket.readText
 import io.ktor.jackson.jackson
+import io.ktor.request.receive
 import io.ktor.response.respond
 import io.ktor.response.respondText
 import io.ktor.routing.get
@@ -46,15 +46,12 @@ fun Application.module(testing: Boolean = false): Unit {
     routing {
         install(StatusPages) {
             exception<AuthenticationException> { cause ->
-                call.respond(HttpStatusCode.Unauthorized, "OLmadi hocam")
+                call.respond(HttpStatusCode.Unauthorized, "Olmadi hocam")
             }
             exception<AuthorizationException> { cause ->
                 call.respond(HttpStatusCode.Forbidden)
             }
 
-        }
-        get("/") {
-            call.respondText("HELLO WORLD!", contentType = ContentType.Text.Plain)
         }
 
         route("api") {
@@ -71,6 +68,12 @@ fun Application.module(testing: Boolean = false): Unit {
                     ServerStatus.Success -> call.respondText { "SUCCESS" }
                     ServerStatus.UsernameExists -> call.respondText { "Pick Different username" }
                 }
+            }
+            post("/{user}/publish") {
+                val userName = call.parameters["user"]!!
+                val topic = call.receive<Topic>()
+                Server.publish(userName, topic)
+                call.respond(HttpStatusCode.OK)
             }
 
             webSocket("/subscription") {

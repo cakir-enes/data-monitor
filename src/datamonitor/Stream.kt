@@ -19,7 +19,9 @@ interface Stream {
     val name: String
 
     @Throws(ConnectionFailed::class, SubjectNotFound::class)
-    fun <T> subscribe(subject: String, type: Class<T>, handler: (T) -> Unit): Subscription
+    fun <T : Any> subscribe(subject: String, type: Class<T>, handler: (T) -> Unit): Subscription
+
+    fun <T : Any> publish(subject: String, data: T, type: Class<T>)
 }
 
 class NatsStream : Stream {
@@ -30,7 +32,7 @@ class NatsStream : Stream {
     private val subjects = listOf("topic-foo", "topic-bar", "topic-baz")
     override val name = "NATS"
 
-    override fun <T> subscribe(subject: String, type: Class<T>, handler: (T) -> Unit): Subscription {
+    override fun <T : Any> subscribe(subject: String, type: Class<T>, handler: (T) -> Unit): Subscription {
         logger.info { "Subscribing to $subject" }
 
         if (!subjects.contains(subject)) throw Stream.SubjectNotFound("$subject Not Found")
@@ -51,5 +53,10 @@ class NatsStream : Stream {
         } catch (e: Exception) {
             throw e
         }
+    }
+
+    override fun <T : Any> publish(subject: String, data: T, type: Class<T>) {
+        logger.debug { "PUBLISHING $data" }
+        connection.publish(subject, JSON.writeValueAsBytes(data))
     }
 }
